@@ -1,0 +1,5 @@
+{
+  "name": "Mimitos Pet Shop",
+  "description": "Tienda online mobile-first para mascotas con catálogo sincronizado con Google Sheets y pedidos por WhatsApp.",
+  "requestFramePermissions": []
+}
