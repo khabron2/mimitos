@@ -22,7 +22,6 @@ export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'inventory' | 'sales'>('inventory');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   
   // Modal states
   const [showProductModal, setShowProductModal] = useState(false);
@@ -170,36 +169,6 @@ export default function AdminPanel() {
     p.PRODUCTO.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.CATEGORIA.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const months = Array.from(new Set(sales.map(sale => {
-    const dateParts = String(sale.Fecha || '').split(',')[0].split('/');
-    if (dateParts.length === 3) {
-      // Assuming DD/MM/YYYY or D/M/YYYY
-      return `${dateParts[2]}-${dateParts[1].padStart(2, '0')}`;
-    }
-    return null;
-  }).filter(Boolean))).sort().reverse() as string[];
-
-  const filteredSales = sales.filter(sale => {
-    if (selectedMonth === 'all') return true;
-    const dateParts = String(sale.Fecha || '').split(',')[0].split('/');
-    if (dateParts.length === 3) {
-      const monthYear = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}`;
-      return monthYear === selectedMonth;
-    }
-    return false;
-  });
-
-  const monthNames: { [key: string]: string } = {
-    '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
-    '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
-    '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
-  };
-
-  const formatMonthLabel = (monthYear: string) => {
-    const [year, month] = monthYear.split('-');
-    return `${monthNames[month]} ${year}`;
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -379,28 +348,8 @@ export default function AdminPanel() {
         ) : (
           /* Sales Table */
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">Registro de Ventas</h2>
-                {selectedMonth !== 'all' && (
-                  <p className="text-sm font-bold text-green-600">
-                    Total del mes: ${filteredSales.reduce((sum, s) => sum + (parseFloat(s.Total) || 0), 0).toLocaleString('es-AR')}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold text-gray-400 uppercase">Filtrar por mes:</label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="p-2 bg-gray-50 rounded-xl border border-gray-200 focus:border-green-500 outline-none font-bold text-sm"
-                >
-                  <option value="all">Todos los meses</option>
-                  {months.map(m => (
-                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-800">Registro de Ventas</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -419,13 +368,13 @@ export default function AdminPanel() {
                         <RefreshCw className="w-10 h-10 text-green-500 animate-spin mx-auto" />
                       </td>
                     </tr>
-                  ) : filteredSales.length === 0 ? (
+                  ) : sales.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-20 text-center text-gray-400 font-bold">
-                        No hay ventas registradas para este periodo
+                        No hay ventas registradas
                       </td>
                     </tr>
-                  ) : filteredSales.slice().reverse().map((sale, i) => (
+                  ) : sales.slice().reverse().map((sale, i) => (
                     <tr key={i} className="hover:bg-green-50/30 transition-colors">
                       <td className="px-6 py-4 text-xs font-bold text-gray-500">{sale.Fecha}</td>
                       <td className="px-6 py-4 font-bold text-gray-700">

@@ -70,8 +70,7 @@ function Shop() {
     return products.filter((p) => {
       const matchesSearch = p.PRODUCTO.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'Todos' || p.CATEGORIA === selectedCategory;
-      const hasStock = p.STOCK > 0;
-      return matchesSearch && matchesCategory && hasStock;
+      return matchesSearch && matchesCategory;
     });
   }, [products, searchTerm, selectedCategory]);
 
