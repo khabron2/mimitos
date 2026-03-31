@@ -21,6 +21,32 @@ function Shop() {
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallButton, setShowInstallButton] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallButton(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallButton(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,14 +70,23 @@ function Shop() {
     return products.filter((p) => {
       const matchesSearch = p.PRODUCTO.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'Todos' || p.CATEGORIA === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const hasStock = p.STOCK > 0;
+      return matchesSearch && matchesCategory && hasStock;
     });
   }, [products, searchTerm, selectedCategory]);
 
   const addToCart = (product: Product) => {
+    const existing = cart.find((item) => item.id === product.id);
+    if (existing && existing.quantity >= product.STOCK) {
+      setToast(`¡No hay más stock de ${product.PRODUCTO}!`);
+      setTimeout(() => setToast(null), 2000);
+      return;
+    }
+    if (product.STOCK <= 0) return;
+
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      if (existing) {
+      const existingInPrev = prev.find((item) => item.id === product.id);
+      if (existingInPrev) {
         return prev.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -80,6 +115,12 @@ function Shop() {
 
   const clearCart = () => setCart([]);
 
+  const updateLocalStock = (id: string, newStock: number) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, STOCK: newStock } : p))
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center gap-4">
@@ -101,6 +142,30 @@ function Shop() {
         onOpenCart={() => setIsCartOpen(true)}
         onCategoryFilter={setSelectedCategory}
       />
+
+      {showInstallButton && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-orange-600 text-white px-4 py-3 flex items-center justify-between sticky top-16 z-40 shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-1.5 rounded-lg shadow-sm">
+              <PawPrint className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-sm font-black leading-tight">Instala Mimitos</p>
+              <p className="text-[10px] font-medium opacity-90">Accede más rápido desde tu pantalla de inicio</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleInstallClick}
+            className="bg-white text-orange-600 px-4 py-1.5 rounded-full text-xs font-black shadow-sm hover:bg-orange-50 transition-colors"
+          >
+            INSTALAR
+          </button>
+        </motion.div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
         {/* Hero Section */}
@@ -196,6 +261,7 @@ function Shop() {
         onUpdateQuantity={updateQuantity}
         onRemoveItem={removeFromCart}
         onClearCart={clearCart}
+        onUpdateLocalStock={updateLocalStock}
         settings={settings}
       />
 

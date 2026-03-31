@@ -11,16 +11,19 @@ interface CartProps {
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
+  onUpdateLocalStock: (id: string, newStock: number) => void;
   settings: AppSettings;
 }
 
-export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, onClearCart, settings }: CartProps) {
+export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, onClearCart, onUpdateLocalStock, settings }: CartProps) {
   const [customerName, setCustomerName] = useState('');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
   const [deliveryMethod, setDeliveryMethod] = useState<'Domicilio' | 'Retiro'>('Retiro');
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [whatsappUrl, setWhatsappUrl] = useState('');
 
   const getItemPrice = (item: CartItem) => {
     if (item.OFERTA && item.OFERTA > 0) {
@@ -41,48 +44,78 @@ export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemov
 
     setIsSaving(true);
 
-    const productList = items
-      .map((item) => `${item.PRODUCTO} x${item.quantity}`)
-      .join(', ');
-    
-    const phone = settings.whatsappNumber;
-    const detailedProductList = items
-      .map((item) => {
-        const price = getItemPrice(item);
-        return `• ${item.PRODUCTO} x${item.quantity} - $${((price || 0) * (item.quantity || 1)).toLocaleString('es-AR')}`;
-      })
-      .join('\n');
-    
-    const message = `Hola, quisiera realizar un encargo de los siguientes productos:\n\n${detailedProductList}\n\n` +
-      `--------------------------\n` +
-      `Subtotal: $${(subtotal || 0).toLocaleString('es-AR')}\n` +
-      `Entrega: ${deliveryMethod === 'Domicilio' ? `$${(settings?.shippingPrice || 0).toLocaleString('es-AR')} (A domicilio)` : 'Gratis (Retiro)'}\n` +
-      `TOTAL: $${(total || 0).toLocaleString('es-AR')}\n` +
-      `--------------------------\n` +
-      `Nombre: ${customerName}\n` +
-      `Domicilio: ${deliveryMethod === 'Domicilio' ? address : 'Retiro en local'}\n` +
-      `Pago: ${paymentMethod}`;
-    
-    // Record sale in Google Sheets
-    await recordSale({
-      nombre: customerName,
-      domicilio: deliveryMethod === 'Domicilio' ? address : 'Retiro en local',
-      pedido: productList,
-      total: total,
-      fecha: new Date().toLocaleString('es-AR')
-    });
+    try {
+      const productList = items
+        .map((item) => `${item.PRODUCTO} x${item.quantity}`)
+        .join(', ');
+      
+      let phone = String(settings.whatsappNumber || '').replace(/\D/g, '');
+      
+      // Argentine number logic
+      if (phone.length === 10) {
+        phone = '549' + phone;
+      } else if (phone.length === 12 && phone.startsWith('54')) {
+        // If it has 54 but missing the 9 for mobile
+        phone = '549' + phone.substring(2);
+      }
 
-    // Update stock for each item
-    for (const item of items) {
-      const newStock = Math.max(0, (item.STOCK || 0) - (item.quantity || 0));
-      await updateStock(item.id, newStock);
+      const detailedProductList = items
+        .map((item) => {
+          const price = getItemPrice(item);
+          return `* ${item.PRODUCTO} x${item.quantity} - $${((price || 0) * (item.quantity || 1)).toLocaleString('es-AR')}`;
+        })
+        .join('\n');
+      
+      const message = `🐾 *¡Hola! Quisiera realizar un encargo de los siguientes productos:* 🐾\n\n${detailedProductList}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💰 *Subtotal:* $${(subtotal || 0).toLocaleString('es-AR')}\n` +
+        `🚚 *Entrega:* ${deliveryMethod === 'Domicilio' ? `$${(settings?.shippingPrice || 0).toLocaleString('es-AR')} (A domicilio)` : 'Gratis (Retiro)'}\n` +
+        `✨ *TOTAL:* $${(total || 0).toLocaleString('es-AR')}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 *Nombre:* ${customerName}\n` +
+        `📍 *Domicilio:* ${deliveryMethod === 'Domicilio' ? address : 'Retiro en local'}\n` +
+        `💳 *Pago:* ${paymentMethod}\n\n` +
+        `*En breve nos estaremos comunicando para terminar su encargo.*`;
+      
+      // Record sale in Google Sheets
+      await recordSale({
+        nombre: customerName,
+        domicilio: deliveryMethod === 'Domicilio' ? address : 'Retiro en local',
+        pedido: productList,
+        total: total,
+        fecha: new Date().toLocaleString('es-AR')
+      });
+
+      // Update stock for each item
+      for (const item of items) {
+        const newStock = Math.max(0, (item.STOCK || 0) - (item.quantity || 0));
+        await updateStock(item.id, newStock);
+        onUpdateLocalStock(item.id, newStock);
+      }
+
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      setWhatsappUrl(url);
+      setIsSuccess(true);
+      onClearCart();
+    } catch (error) {
+      console.error('Error during checkout:', error);
+      alert('Hubo un error al procesar tu pedido. Por favor, intenta de nuevo.');
+    } finally {
+      setIsSaving(false);
     }
+  };
 
-    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-    
-    setIsSaving(false);
-    onClearCart();
+  const copyToClipboard = () => {
+    const message = decodeURIComponent(whatsappUrl.split('text=')[1]);
+    navigator.clipboard.writeText(message);
+    alert('Mensaje copiado al portapapeles. Puedes pegarlo en WhatsApp.');
+  };
+
+  const handleFinish = () => {
+    setIsSuccess(false);
+    setShowCheckout(false);
+    setCustomerName('');
+    setAddress('');
     onClose();
   };
 
@@ -115,7 +148,40 @@ export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemov
             </div>
 
             <div className="flex-grow overflow-y-auto p-6 space-y-6">
-              {items.length === 0 ? (
+              {isSuccess ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center h-full text-center gap-6"
+                >
+                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+                    <MessageCircle className="w-10 h-10 text-green-600" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-2xl font-bold text-gray-800">¡Pedido Recibido!</h3>
+                    <p className="text-gray-500 text-sm">Para completar tu encargo, haz clic en el botón de abajo para enviar el pedido por WhatsApp.</p>
+                  </div>
+                  <div className="w-full space-y-3">
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={handleFinish}
+                      className="w-full bg-green-500 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-green-100 hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Enviar por WhatsApp
+                    </a>
+                    <button
+                      onClick={copyToClipboard}
+                      className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Copiar mensaje (si falla el botón)
+                    </button>
+                  </div>
+                </motion.div>
+              ) : items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
                   <PawPrint className="w-16 h-16 opacity-20" />
                   <p className="text-lg font-medium">Tu carrito está vacío</p>
@@ -183,7 +249,7 @@ export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemov
               )}
             </div>
 
-            {items.length > 0 && (
+            {items.length > 0 && !isSuccess && (
               <div className="p-6 bg-gray-50 border-t border-gray-200 space-y-4">
                 <div className="flex justify-between items-center text-lg font-bold">
                   <span className="text-gray-600">Total</span>

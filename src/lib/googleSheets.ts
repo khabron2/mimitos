@@ -248,7 +248,11 @@ export async function fetchSettings(): Promise<AppSettings> {
       credentials: 'omit',
       body: JSON.stringify({ action: 'fetchSettings' }),
     });
-    return await response.json();
+    const data = await response.json();
+    return {
+      shippingPrice: parseFloat(data.shippingPrice) || 0,
+      whatsappNumber: String(data.whatsappNumber || '')
+    };
   } catch (error) {
     console.error('Error fetching settings details:', error);
     return { shippingPrice: 3000, whatsappNumber: '3834465044' };
