@@ -322,7 +322,7 @@ export default function AdminPanel() {
                       key={product.id} 
                       className={cn(
                         "transition-colors",
-                        product.STOCK === 0 ? "bg-red-100 hover:bg-red-200/60" : "hover:bg-orange-50/30"
+                        product.STOCK === 0 ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-orange-50/30"
                       )}
                     >
                       <td className="px-6 py-4">
